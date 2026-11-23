@@ -1,0 +1,1791 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>jadwal.pnj // h-1 — Sistem Cek Jadwal &amp; Status Kelas</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans (UI) & JetBrains Mono (Kode/Indeks) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            pnj: {
+              DEFAULT: '#007A8C',
+              dark: '#00606E',
+              light: '#E6F4F6',
+              border: '#B8DFE5',
+            },
+            canvas: '#F6F7F9',
+            ink: '#0F172A',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      background-color: #F6F7F9;
+      color: #0F172A;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    /* Scrollbar tipis bergaya editor kode */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-pnj-light selection:text-pnj">
+
+  <!-- ===================================================================== -->
+  <!-- 1. COMPACT TOP BAR & NAVIGATION                                       -->
+  <!-- ===================================================================== -->
+  <header class="sticky top-0 z-30 bg-white border-b border-slate-200">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="min-h-[60px] py-2.5 flex flex-wrap items-center justify-between gap-3">
+
+        <!-- Kiri: Brand Identifier & Subjudul -->
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-md bg-pnj-light border border-pnj-border flex items-center justify-center shrink-0">
+            <span class="font-mono font-bold text-xs text-pnj">H-1</span>
+          </div>
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-mono font-bold text-base tracking-tight text-ink">
+                jadwal<span class="text-pnj">.pnj</span> // h-1
+              </span>
+              <!-- Indikator Status Koneksi Real-Time Firestore -->
+              <span id="syncStatusBadge" class="inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                <span id="syncStatusDot" class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                <span id="syncStatusText">SYNCING...</span>
+              </span>
+              <span id="lastSyncLabel" class="hidden sm:inline font-mono text-[10px] text-slate-400 tabular-nums">
+                Last sync: --:--:--
+              </span>
+            </div>
+            <p class="text-[11px] sm:text-xs text-slate-500">
+              Sistem Cek Status Kuliah H-1 &bull; Sinkronisasi Real-Time Kelas
+            </p>
+          </div>
+        </div>
+
+        <!-- Kanan: Indikator Mode Aktif & Tombol Login/Kunci Mode PJ -->
+        <div class="flex items-center gap-2">
+          <span id="activeModeBadge" class="font-mono text-[11px] font-semibold px-2.5 py-1 rounded border bg-slate-100 border-slate-200 text-slate-700">
+            Mode Mahasiswa
+          </span>
+          <button
+            id="btnTogglePJBar"
+            type="button"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition cursor-pointer bg-white border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50"
+          >
+            <svg id="pjIconLocked" class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <svg id="pjIconUnlocked" class="w-3.5 h-3.5 text-emerald-600 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+            </svg>
+            <span id="pjToggleLabel">Mode PJ Kelas</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Inline Popover/Bar Otorisasi PIN PJ Kelas (Privat — Tanpa Petunjuk PIN Publik) -->
+      <div id="pjAuthBar" class="hidden pb-3 pt-1 border-t border-slate-100">
+        <form id="formPJAuth" class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-md px-3.5 py-2.5">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="font-mono text-xs font-semibold text-slate-700">AUTH_PJ:</span>
+            <div class="relative flex items-center">
+              <input
+                id="inputPJPin"
+                type="password"
+                autocomplete="off"
+                placeholder="Masukkan PIN khusus PJ..."
+                class="w-48 sm:w-52 font-mono text-xs pl-2.5 pr-8 py-1.5 rounded bg-white border border-slate-300 text-ink focus:outline-none focus:border-pnj"
+                required
+              />
+              <button
+                id="btnTogglePinVisibility"
+                type="button"
+                aria-label="Tampilkan atau sembunyikan PIN"
+                class="absolute right-2 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+              >
+                <svg id="eyeIconShow" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg id="eyeIconHide" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                </svg>
+              </button>
+            </div>
+            <button
+              type="submit"
+              class="px-3 py-1.5 rounded bg-pnj hover:bg-pnj-dark text-white text-xs font-semibold transition cursor-pointer"
+            >
+              Masuk Mode PJ
+            </button>
+            <span id="pjPinError" class="hidden font-mono text-xs text-rose-600 font-medium">
+              [ERR] PIN tidak valid &mdash; akses ditolak.
+            </span>
+          </div>
+
+          <div class="flex items-center gap-3 text-xs text-slate-500">
+            <span>Hanya PJ Kelas yang memiliki akses ubah status jadwal.</span>
+            <button
+              id="btnCloseAuthBar"
+              type="button"
+              class="text-slate-400 hover:text-slate-700 font-mono text-sm leading-none px-1 cursor-pointer"
+              aria-label="Tutup bar PIN"
+            >
+              &times;
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Bar Navigasi Utama (3 Tab: Jadwal Besok, Semua Jadwal, Trace Algoritma & C++) -->
+      <nav class="flex items-center gap-1 -mb-px overflow-x-auto" aria-label="Navigasi Utama">
+        <button
+          id="navBesok"
+          type="button"
+          class="px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap cursor-pointer"
+        >
+          Jadwal Besok (H-1)
+        </button>
+        <button
+          id="navSemua"
+          type="button"
+          class="px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap cursor-pointer"
+        >
+          Semua Jadwal (Sel&ndash;Jum)
+        </button>
+        <button
+          id="navTrace"
+          type="button"
+          class="px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition whitespace-nowrap cursor-pointer"
+        >
+          Trace Algoritma &amp; C++
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- MAIN WORKSPACE CONTAINER                                              -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
+
+    <!-- =================================================================== -->
+    <!-- 2. PANEL KONTROL SIMULASI HARI INI (hari[0..6])                     -->
+    <!-- =================================================================== -->
+    <section class="bg-white border border-slate-200 rounded-lg p-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-mono text-xs font-bold uppercase tracking-wider text-slate-500">
+            SIMULASI HARI INI // hari[0..6]
+          </span>
+          <button
+            id="btnSyncRealtimeDay"
+            type="button"
+            class="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            ↻ Hari Ini (Real-time)
+          </button>
+        </div>
+
+        <!-- Live Monospace Formula Readout -->
+        <div id="moduloFormulaBox" class="font-mono text-xs bg-slate-50 border border-slate-200 px-2.5 py-1 rounded text-slate-700 tabular-nums">
+          <!-- Diisi via JS: besok = (1 + 1) % 7 -> 2 (Rabu) -->
+        </div>
+      </div>
+
+      <!-- Strip 7 Tombol Indeks Hari (0: Sen .. 6: Min) -->
+      <div id="dayStripContainer" class="mt-3 grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+        <!-- Dirender oleh JS -->
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 1: SIMULASI JADWAL                                              -->
+    <!-- =================================================================== -->
+    <section id="viewSimulasi" class="space-y-4">
+
+      <!-- Header Daftar Jadwal + Filter Tampilan + Aksi WA & Reset -->
+      <div class="bg-white border border-slate-200 rounded-lg p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 id="scheduleHeading" class="text-base sm:text-lg font-bold text-ink tracking-tight">
+              Jadwal Kuliah Besok — Rabu
+            </h1>
+            <span id="scheduleIndexPill" class="font-mono text-xs px-2 py-0.5 rounded bg-pnj-light text-pnj border border-pnj-border font-semibold">
+              besok = hari[2]
+            </span>
+          </div>
+          <p id="scheduleSubheading" class="text-xs text-slate-500 mt-0.5">
+            Filter otomatis H+1 dari hari simulasi yang dipilih.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Tombol Copy Info ke Grup WA -->
+          <button
+            id="btnCopyWA"
+            type="button"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-white hover:bg-slate-50 text-ink border border-slate-300 hover:border-slate-400 transition cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            <span>Copy Info ke Grup WA</span>
+          </button>
+
+          <!-- Tombol Reset Data Default (Hanya tampil saat Mode PJ aktif) -->
+          <button
+            id="btnResetDefault"
+            type="button"
+            class="hidden px-3 py-1.5 rounded-md text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 transition cursor-pointer"
+          >
+            Reset Data Default
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner Panduan Mode PJ (Muncul saat Mode PJ Aktif) -->
+      <div id="pjActiveBanner" class="hidden bg-emerald-50/80 border border-emerald-200 rounded-lg px-4 py-2.5 flex items-center justify-between gap-2 text-xs text-emerald-950">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-600 shrink-0"></span>
+          <span>
+            <strong>Mode PJ Kelas Aktif:</strong> Pilih langsung <strong>Mata Kuliah</strong>, <strong>Jam</strong>, <strong>Ruangan</strong>, dan <strong>Status</strong> melalui dropdown pada setiap kartu atau tambah jadwal baru di bawah.
+          </span>
+        </div>
+      </div>
+
+      <!-- Container Kartu Jadwal -->
+      <div id="scheduleListContainer" class="space-y-3">
+        <!-- Dirender dinamis oleh JavaScript -->
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- PANEL TAMBAH JADWAL BARU (KHUSUS MODE PJ AKTIF)                   -->
+      <!-- ================================================================= -->
+      <section id="addSchedulePanel" class="hidden bg-white border border-pnj-border rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-sm bg-pnj"></span>
+            <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-pnj">
+              + Tambah Jadwal Baru (struct Jadwal)
+            </h3>
+          </div>
+          <span class="font-mono text-[11px] text-slate-400">Dropdown Terstandar PNJ</span>
+        </div>
+
+        <form id="formAddSchedule" class="space-y-3 text-xs">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <!-- 1. Hari -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Hari Kuliah</label>
+              <select name="hari" id="addHariSelect" class="w-full font-mono px-2.5 py-2 rounded border border-slate-300 bg-white text-ink focus:outline-none focus:border-pnj">
+                <option value="0">0 — Senin (Kelas Pengganti)</option>
+                <option value="1" selected>1 — Selasa</option>
+                <option value="2">2 — Rabu</option>
+                <option value="3">3 — Kamis</option>
+                <option value="4">4 — Jumat</option>
+                <option value="5">5 — Sabtu (Kelas Pengganti)</option>
+              </select>
+            </div>
+
+            <!-- 2. Mata Kuliah (8 Pilihan) -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Mata Kuliah</label>
+              <select name="matkul" id="addMatkulSelect" class="w-full px-2.5 py-2 rounded border border-slate-300 bg-white text-ink focus:outline-none focus:border-pnj">
+                <!-- Diisi via JS -->
+              </select>
+            </div>
+
+            <!-- 3. Jam Perkuliahan (3 Pilihan) -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Jam Perkuliahan</label>
+              <select name="jam" id="addJamSelect" class="w-full font-mono px-2.5 py-2 rounded border border-slate-300 bg-white text-ink focus:outline-none focus:border-pnj">
+                <!-- Diisi via JS -->
+              </select>
+            </div>
+
+            <!-- 4. Ruangan Kampus (6 Pilihan) -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Ruangan</label>
+              <select name="ruang" id="addRuangSelect" class="w-full font-mono px-2.5 py-2 rounded border border-slate-300 bg-white text-ink focus:outline-none focus:border-pnj">
+                <!-- Diisi via JS -->
+              </select>
+            </div>
+
+            <!-- 5. Status Kelas (3 Pilihan) -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Status Kelas</label>
+              <select name="status" id="addStatusSelect" class="w-full font-mono px-2.5 py-2 rounded border border-slate-300 bg-white text-ink focus:outline-none focus:border-pnj">
+                <!-- Diisi via JS -->
+              </select>
+            </div>
+          </div>
+
+          <!-- Catatan PJ + Quick-Fill Chips -->
+          <div class="space-y-2">
+            <label class="block font-semibold text-slate-700">Catatan PJ Kelas</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                name="catatan"
+                id="addCatatanInput"
+                value="Sesuai jadwal"
+                placeholder="Catatan singkat untuk mahasiswa..."
+                required
+                class="flex-1 px-2.5 py-2 rounded border border-slate-300 bg-white text-ink focus:outline-none focus:border-pnj"
+              />
+              <button
+                type="submit"
+                class="px-4 py-2 rounded bg-pnj hover:bg-pnj-dark text-white font-semibold transition cursor-pointer shrink-0"
+              >
+                + Tambah ke Jadwal
+              </button>
+            </div>
+
+            <!-- Quick-Fill Chips -->
+            <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span class="font-mono text-[10px] text-slate-400">Isi cepat:</span>
+              <button type="button" data-add-chip="Sesuai jadwal" class="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 hover:bg-pnj-light hover:text-pnj hover:border-pnj-border border border-slate-200 text-slate-600 transition cursor-pointer">
+                Sesuai jadwal
+              </button>
+              <button type="button" data-add-chip="Link Zoom di grup" class="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 hover:bg-pnj-light hover:text-pnj hover:border-pnj-border border border-slate-200 text-slate-600 transition cursor-pointer">
+                Link Zoom di grup
+              </button>
+              <button type="button" data-add-chip="Dosen berhalangan" class="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 hover:bg-pnj-light hover:text-pnj hover:border-pnj-border border border-slate-200 text-slate-600 transition cursor-pointer">
+                Dosen berhalangan
+              </button>
+              <button type="button" data-add-chip="Tugas di E-Learning" class="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-100 hover:bg-pnj-light hover:text-pnj hover:border-pnj-border border border-slate-200 text-slate-600 transition cursor-pointer">
+                Tugas di E-Learning
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 2: TRACE ALGORITMA & C++ IMPLEMENTATION                         -->
+    <!-- =================================================================== -->
+    <section id="viewTrace" class="hidden space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-base sm:text-lg font-bold text-ink tracking-tight">
+            Live Memory Inspector &amp; Implementasi C++
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-500">
+            Visualisasi eksekusi <span class="font-mono text-xs">linear search</span> pada <span class="font-mono text-xs">MataKuliah jadwal[8]</span> (Selasa–Jumat, Senin Libur) sesuai hari simulasi aktif.
+          </p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <!-- Kiri (5 Kolom): Live Linear Search & Memory Inspector -->
+        <div class="lg:col-span-5 bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <span class="font-mono text-xs font-bold text-slate-700">
+              MEMORY INSPECTOR // jadwal[<span id="memArrayLen">8</span>]
+            </span>
+            <span id="memTargetTag" class="font-mono text-[11px] px-2 py-0.5 rounded bg-pnj-light text-pnj border border-pnj-border">
+              target: besokIdx == 1
+            </span>
+          </div>
+
+          <!-- Ringkasan Eksekusi Loop -->
+          <div id="traceSummaryBox" class="px-4 py-2.5 bg-slate-900 text-slate-200 font-mono text-xs border-b border-slate-800 leading-relaxed">
+            <!-- Diisi otomatis via JS -->
+          </div>
+
+          <!-- Blok Memori Array -->
+          <div id="memoryBlocksContainer" class="p-3 space-y-2 max-h-[560px] overflow-y-auto">
+            <!-- Dirender dinamis oleh JS -->
+          </div>
+        </div>
+
+        <!-- Kanan (7 Kolom): Kode C++ Semester 1 Lengkap -->
+        <div class="lg:col-span-7 bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs font-bold text-slate-700">main.cpp</span>
+              <span class="font-mono text-[11px] text-slate-400">// C++11 Standard</span>
+            </div>
+            <button
+              id="btnCopyCppCode"
+              type="button"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-pnj hover:bg-pnj-dark text-white transition cursor-pointer"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <span>Copy Kode C++</span>
+            </button>
+          </div>
+
+          <pre id="cppSourceCode" class="p-4 bg-slate-950 text-slate-100 font-mono text-xs overflow-x-auto leading-relaxed max-h-[620px] overflow-y-auto">#include &lt;iostream&gt;
+#include &lt;string&gt;
+using namespace std;
+
+// Struct untuk merepresentasikan satu jadwal mata kuliah PNJ
+struct MataKuliah {
+    int hariIdx;        // 0=Senin(Libur), 1=Selasa, 2=Rabu, 3=Kamis, 4=Jumat
+    string matkul;
+    string jam;
+    string ruang;
+    string status;      // "MASUK", "ONLINE", atau "KOSONG"
+    string catatan;
+};
+
+int main() {
+    const string PIN_PJ = "••••••••"; // Rahasia PJ Kelas
+
+    string namaHari[7] = {
+        "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"
+    };
+
+    // Daftar pilihan baku untuk Mode PJ Kelas
+    string opsiMatkul[8] = {
+        "Matematika Diskrit", "Jaringan Komputer", "Sistem Operasi",
+        "Piranti Komputer", "Agama Islam", "Algoritma Dan Pemrograman",
+        "Bahasa Indonesia", "Pengantar TIK"
+    };
+    string opsiJam[3] = {
+        "08.00 - 13.20", "13.20 - 17.00", "11.00 - Selesai"
+    };
+    string opsiRuang[6] = {
+        "AA301", "Perpus 8", "PUT TIK 2",
+        "Perpus 2", "Perpus 1", "Online (Zoom / GMeet)"
+    };
+
+    // Array jadwal baku PNJ: Senin Libur (0 matkul), Selasa-Jumat (2 matkul/hari)
+    MataKuliah jadwal[8] = {
+        {1, "Matematika Diskrit", "08.00 - 13.20", "AA301", "MASUK", "Sesuai jadwal"},
+        {1, "Jaringan Komputer", "13.20 - 17.00", "PUT TIK 2", "MASUK", "Praktikum lab"},
+        {2, "Sistem Operasi", "08.00 - 13.20", "Perpus 8", "ONLINE", "Link Zoom dibagikan di grup WA"},
+        {2, "Piranti Komputer", "13.20 - 17.00", "PUT TIK 2", "MASUK", "Sesuai jadwal"},
+        {3, "Agama Islam", "08.00 - 13.20", "Perpus 2", "MASUK", "Sesuai jadwal"},
+        {3, "Algoritma Dan Pemrograman", "13.20 - 17.00", "PUT TIK 2", "MASUK", "Presentasi studi kasus"},
+        {4, "Bahasa Indonesia", "08.00 - 13.20", "Perpus 1", "MASUK", "Sesuai jadwal"},
+        {4, "Pengantar TIK", "13.20 - 17.00", "AA301", "MASUK", "Sesuai jadwal"}
+    };
+    int jumlahData = 8;
+
+    int todayIdx;
+    cout &lt;&lt; "=== jadwal.pnj // h-1 checker ===\n";
+    cout &lt;&lt; "Masukkan indeks hari ini (0=Sen .. 6=Min): ";
+    cin &gt;&gt; todayIdx;
+
+    if (todayIdx &lt; 0 || todayIdx &gt; 6) {
+        cout &lt;&lt; "Error: Indeks hari harus antara 0 sampai 6.\n";
+        return 1;
+    }
+
+    // Rumus modulo untuk menghitung indeks hari besok (H+1)
+    int besokIdx = (todayIdx + 1) % 7;
+    cout &lt;&lt; "Hari ini : " &lt;&lt; namaHari[todayIdx] &lt;&lt; " (" &lt;&lt; todayIdx &lt;&lt; ")\n";
+    cout &lt;&lt; "Besok    : " &lt;&lt; namaHari[besokIdx] &lt;&lt; " (" &lt;&lt; besokIdx &lt;&lt; ")\n";
+
+    int menu;
+    do {
+        cout &lt;&lt; "\nMenu Utama:\n";
+        cout &lt;&lt; "1. Cek Jadwal Besok (Mode Mahasiswa)\n";
+        cout &lt;&lt; "2. Update Jadwal &amp; Status (Mode PJ Kelas)\n";
+        cout &lt;&lt; "0. Keluar\n";
+        cout &lt;&lt; "Pilih: ";
+        cin &gt;&gt; menu;
+
+        switch (menu) {
+            case 1: {
+                cout &lt;&lt; "\n--- JADWAL BESOK: " &lt;&lt; namaHari[besokIdx] &lt;&lt; " ---\n";
+                if (besokIdx == 0) {
+                    cout &lt;&lt; "LIBUR KULIAH // SENIN OFF (0 Matkul) — Tidak ada jadwal reguler pada hari Senin.\n";
+                } else if (besokIdx == 5 || besokIdx == 6) {
+                    cout &lt;&lt; "LIBUR AKHIR PEKAN — Tidak ada perkuliahan reguler.\n";
+                } else {
+                    int ketemu = 0;
+                    for (int i = 0; i &lt; jumlahData; i++) {
+                        if (jadwal[i].hariIdx == besokIdx) {
+                            ketemu++;
+                            cout &lt;&lt; "\n[" &lt;&lt; ketemu &lt;&lt; "] " &lt;&lt; jadwal[i].matkul
+                                 &lt;&lt; " [" &lt;&lt; jadwal[i].status &lt;&lt; "]\n";
+                            cout &lt;&lt; "    Jam     : " &lt;&lt; jadwal[i].jam &lt;&lt; "\n";
+                            cout &lt;&lt; "    Ruangan : " &lt;&lt; jadwal[i].ruang &lt;&lt; "\n";
+                            cout &lt;&lt; "    Catatan : " &lt;&lt; jadwal[i].catatan &lt;&lt; "\n";
+                        }
+                    }
+                    if (ketemu == 0) {
+                        cout &lt;&lt; "Tidak ada jadwal tercatat untuk hari besok.\n";
+                    }
+                }
+                break;
+            }
+
+            case 2: {
+                string pin;
+                cout &lt;&lt; "Masukkan PIN PJ Kelas: ";
+                cin &gt;&gt; pin;
+
+                if (pin != PIN_PJ) {
+                    cout &lt;&lt; "Akses ditolak: PIN salah.\n";
+                    break;
+                }
+
+                cout &lt;&lt; "\nDaftar Jadwal Aktif (Selasa - Jumat):\n";
+                for (int i = 0; i &lt; jumlahData; i++) {
+                    cout &lt;&lt; i &lt;&lt; ". [" &lt;&lt; namaHari[jadwal[i].hariIdx] &lt;&lt; "] "
+                         &lt;&lt; jadwal[i].matkul &lt;&lt; " | " &lt;&lt; jadwal[i].jam
+                         &lt;&lt; " | " &lt;&lt; jadwal[i].ruang &lt;&lt; " (" &lt;&lt; jadwal[i].status &lt;&lt; ")\n";
+                }
+
+                int idx;
+                cout &lt;&lt; "Pilih indeks jadwal (0.." &lt;&lt; jumlahData - 1 &lt;&lt; "): ";
+                cin &gt;&gt; idx;
+
+                if (idx &gt;= 0 &amp;&amp; idx &lt; jumlahData) {
+                    int pilJam, pilRuang, pilStatus;
+
+                    cout &lt;&lt; "\nPilih Jam Perkuliahan:\n";
+                    for (int j = 0; j &lt; 3; j++) {
+                        cout &lt;&lt; (j + 1) &lt;&lt; ". " &lt;&lt; opsiJam[j] &lt;&lt; "\n";
+                    }
+                    cout &lt;&lt; "Pilihan (1-3): ";
+                    cin &gt;&gt; pilJam;
+                    if (pilJam &gt;= 1 &amp;&amp; pilJam &lt;= 3) jadwal[idx].jam = opsiJam[pilJam - 1];
+
+                    cout &lt;&lt; "\nPilih Status Kelas (1=MASUK, 2=ONLINE, 3=KOSONG): ";
+                    cin &gt;&gt; pilStatus;
+                    if (pilStatus == 2) {
+                        jadwal[idx].status = "ONLINE";
+                        jadwal[idx].ruang = "Online (Zoom / GMeet)";
+                    } else if (pilStatus == 3) {
+                        jadwal[idx].status = "KOSONG";
+                    } else {
+                        jadwal[idx].status = "MASUK";
+                    }
+
+                    cout &lt;&lt; "\nPilih Ruangan Kampus:\n";
+                    for (int r = 0; r &lt; 6; r++) {
+                        cout &lt;&lt; (r + 1) &lt;&lt; ". " &lt;&lt; opsiRuang[r] &lt;&lt; "\n";
+                    }
+                    cout &lt;&lt; "Pilihan (1-6): ";
+                    cin &gt;&gt; pilRuang;
+                    if (pilRuang &gt;= 1 &amp;&amp; pilRuang &lt;= 6) jadwal[idx].ruang = opsiRuang[pilRuang - 1];
+
+                    cin.ignore();
+                    cout &lt;&lt; "Catatan PJ: ";
+                    getline(cin, jadwal[idx].catatan);
+
+                    cout &lt;&lt; "Data jadwal berhasil diperbarui.\n";
+                } else {
+                    cout &lt;&lt; "Indeks tidak valid.\n";
+                }
+                break;
+            }
+
+            case 0:
+                cout &lt;&lt; "Program selesai.\n";
+                break;
+
+            default:
+                cout &lt;&lt; "Pilihan menu tidak tersedia.\n";
+        }
+    } while (menu != 0);
+
+    return 0;
+}</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toastArea" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm"></div>
+
+  <!-- ===================================================================== -->
+  <!-- JAVASCRIPT APPLICATION LOGIC & FIREBASE FIRESTORE REAL-TIME SYNC      -->
+  <!-- ===================================================================== -->
+ <script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyBjKFT7J1DlpkEuIo3-QA8ObhKLdz3hv6E",
+    authDomain: "jadwaltmj1c.firebaseapp.com",
+    projectId: "jadwaltmj1c",
+    storageBucket: "jadwaltmj1c.firebasestorage.app",
+    messagingSenderId: "243014319690",
+    appId: "1:243014319690:web:2f21a4f1c86255ca7c30b3",
+    measurementId: "G-VNPX7JQSVJ"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+
+    // =========================================================================
+    // 2. KONSTANTA DATA BAKU PNJ & OTORISASI PJ KELAS
+    // =========================================================================
+    const PIN_PJ = "PJTMJ1C";
+    const STORAGE_KEY = "pnj_jadwal_tmj1c_v1";
+
+    const HARI_PENDEK = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+    const HARI_PANJANG = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+
+    const OPSI_MATKUL = [
+      "Matematika Diskrit",
+      "Jaringan Komputer",
+      "Sistem Operasi",
+      "Piranti Komputer",
+      "Agama Islam",
+      "Algoritma Dan Pemrograman",
+      "Bahasa Indonesia",
+      "Pengantar TIK"
+    ];
+
+    const OPSI_JAM = [
+      "08.00 - 13.20",
+      "13.20 - 17.00",
+      "11.00 - Selesai"
+    ];
+
+    const OPSI_RUANG = [
+      "AA301",
+      "Perpus 8",
+      "PUT TIK 2",
+      "Perpus 2",
+      "Perpus 1",
+      "Online (Zoom / GMeet)"
+    ];
+
+    const OPSI_STATUS = ["MASUK", "ONLINE", "KOSONG"];
+
+    const QUICK_CATATAN = [
+      "Sesuai jadwal",
+      "Link Zoom di grup",
+      "Dosen berhalangan",
+      "Tugas di E-Learning"
+    ];
+
+    const DEFAULT_JADWAL = [
+      {
+        id: "mk-1",
+        hari: 1,
+        matkul: "Matematika Diskrit",
+        jam: "08.00 - 13.20",
+        ruang: "AA301",
+        status: "MASUK",
+        catatan: "Sesuai jadwal",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-2",
+        hari: 1,
+        matkul: "Jaringan Komputer",
+        jam: "13.20 - 17.00",
+        ruang: "PUT TIK 2",
+        status: "MASUK",
+        catatan: "Praktikum lab",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-3",
+        hari: 2,
+        matkul: "Sistem Operasi",
+        jam: "08.00 - 13.20",
+        ruang: "Online (Zoom / GMeet)",
+        status: "ONLINE",
+        catatan: "Link Zoom dibagikan di grup WA",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-4",
+        hari: 2,
+        matkul: "Piranti Komputer",
+        jam: "13.20 - 17.00",
+        ruang: "PUT TIK 2",
+        status: "MASUK",
+        catatan: "Sesuai jadwal",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-5",
+        hari: 3,
+        matkul: "Agama Islam",
+        jam: "08.00 - 13.20",
+        ruang: "Perpus 2",
+        status: "MASUK",
+        catatan: "Sesuai jadwal",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-6",
+        hari: 3,
+        matkul: "Algoritma Dan Pemrograman",
+        jam: "13.20 - 17.00",
+        ruang: "PUT TIK 2",
+        status: "MASUK",
+        catatan: "Presentasi studi kasus",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-7",
+        hari: 4,
+        matkul: "Bahasa Indonesia",
+        jam: "08.00 - 13.20",
+        ruang: "Perpus 1",
+        status: "MASUK",
+        catatan: "Sesuai jadwal",
+        updatedAt: "Default"
+      },
+      {
+        id: "mk-8",
+        hari: 4,
+        matkul: "Pengantar TIK",
+        jam: "13.20 - 17.00",
+        ruang: "AA301",
+        status: "MASUK",
+        catatan: "Sesuai jadwal",
+        updatedAt: "Default"
+      }
+    ];
+
+    // =========================================================================
+    // 3. STATE APLIKASI & PENYIMPANAN LOKAL
+    // =========================================================================
+    function loadLocalData() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal membaca localStorage:", err);
+      }
+      return JSON.parse(JSON.stringify(DEFAULT_JADWAL));
+    }
+
+    function saveLocalData(daftar) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(daftar));
+      } catch (err) {
+        console.warn("Gagal menyimpan ke localStorage:", err);
+      }
+    }
+
+    const state = {
+      todayIdx: 0, // Default 0: Sen (Libur) agar Besok (H+1) langsung menampilkan Selasa
+      activeTab: "besok", // "besok" | "semua" | "trace"
+      isPJUnlocked: false,
+      confirmDeleteId: null,
+      daftar: loadLocalData(),
+      cloudMode: "syncing", // "syncing" | "live" | "local"
+      lastSyncTime: null
+    };
+
+    // Referensi Firestore
+    let db = null;
+    let sharedDocRef = null;
+    let isCloudReady = false;
+
+    // =========================================================================
+    // 4. UTILITAS HELPER
+    // =========================================================================
+    function escapeHTML(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function getCurrentTimeWIB() {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      return `${hh}:${mm}:${ss}`;
+    }
+
+    function getRealtimeTodayIndex() {
+      // JS getDay(): 0=Minggu, 1=Senin..6=Sabtu -> konversi ke 0=Senin..6=Minggu
+      const jsDay = new Date().getDay();
+      return (jsDay + 6) % 7;
+    }
+
+    function buildOptionsHTML(optionsArr, selectedVal) {
+      return optionsArr
+        .map((opt) => {
+          const selected = opt === selectedVal ? "selected" : "";
+          return `<option value="${escapeHTML(opt)}" ${selected}>${escapeHTML(opt)}</option>`;
+        })
+        .join("");
+    }
+
+    function getStatusBadgeHTML(status) {
+      if (status === "MASUK") {
+        return `<span class="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>MASUK</span>`;
+      }
+      if (status === "ONLINE") {
+        return `<span class="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200"><span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>ONLINE</span>`;
+      }
+      return `<span class="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>KOSONG</span>`;
+    }
+
+    function showToast(message, isError = false) {
+      const area = document.getElementById("toastArea");
+      if (!area) return;
+
+      const toast = document.createElement("div");
+      toast.className = `pointer-events-auto font-mono text-xs px-3.5 py-2.5 rounded-md shadow-md border transition-all duration-200 ${
+        isError
+          ? "bg-rose-950 text-rose-100 border-rose-800"
+          : "bg-slate-900 text-slate-100 border-slate-700"
+      }`;
+      toast.textContent = message;
+      area.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-y-1");
+        setTimeout(() => toast.remove(), 220);
+      }, 2800);
+    }
+
+    function copyTextToClipboard(text) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return ok;
+      } catch (err) {
+        console.error("Clipboard copy error:", err);
+        return false;
+      }
+    }
+
+    // =========================================================================
+    // 5. INISIALISASI FIREBASE FIRESTORE & SINKRONISASI REAL-TIME
+    // =========================================================================
+    function updateSyncBadgeUI() {
+      const badge = document.getElementById("syncStatusBadge");
+      const dot = document.getElementById("syncStatusDot");
+      const text = document.getElementById("syncStatusText");
+      const lastLabel = document.getElementById("lastSyncLabel");
+
+      if (!badge || !dot || !text) return;
+
+      if (state.cloudMode === "live") {
+        badge.className =
+          "inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500";
+        text.textContent = "FIRESTORE LIVE";
+      } else if (state.cloudMode === "syncing") {
+        badge.className =
+          "inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse";
+        text.textContent = "SYNCING...";
+      } else {
+        badge.className =
+          "inline-flex items-center gap-1.5 font-mono text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200";
+        dot.className = "w-1.5 h-1.5 rounded-full bg-slate-400";
+        text.textContent = "OFFLINE / LOCAL";
+      }
+
+      if (lastLabel) {
+        lastLabel.textContent = `Last sync: ${state.lastSyncTime || getCurrentTimeWIB()}`;
+      }
+    }
+
+    async function saveDataToCloud() {
+      saveLocalData(state.daftar);
+      state.lastSyncTime = getCurrentTimeWIB();
+      updateSyncBadgeUI();
+
+      if (!isCloudReady || !sharedDocRef) return;
+
+      try {
+        await setDoc(sharedDocRef, {
+          daftar: state.daftar,
+          updatedAt: state.lastSyncTime
+        });
+      } catch (err) {
+        console.warn("Gagal menyimpan ke Firestore, data tetap tersimpan lokal:", err);
+      }
+    }
+
+    async function initFirebaseSync() {
+      try {
+        let firebaseConfig = null;
+        let appId = "pnj-tmj1c-default";
+
+        if (typeof __firebase_config !== "undefined" && __firebase_config) {
+          firebaseConfig = JSON.parse(__firebase_config);
+          if (typeof __app_id !== "undefined" && __app_id) {
+            appId = __app_id;
+          }
+        } else if (
+          CUSTOM_FIREBASE_CONFIG &&
+          CUSTOM_FIREBASE_CONFIG.apiKey &&
+          CUSTOM_FIREBASE_CONFIG.apiKey !== "PASTE_API_KEY_DISINI"
+        ) {
+          firebaseConfig = CUSTOM_FIREBASE_CONFIG;
+        }
+
+        if (!firebaseConfig) {
+          state.cloudMode = "local";
+          state.lastSyncTime = getCurrentTimeWIB();
+          updateSyncBadgeUI();
+          return;
+        }
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        db = getFirestore(app);
+        sharedDocRef = doc(db, "artifacts", appId, "public", "data", "jadwal_kelas", "tmj1c");
+
+        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+
+        onAuthStateChanged(auth, (user) => {
+          if (!user) return;
+          isCloudReady = true;
+
+          onSnapshot(
+            sharedDocRef,
+            async (snap) => {
+              if (snap.exists()) {
+                const data = snap.data();
+                if (Array.isArray(data.daftar)) {
+                  state.daftar = data.daftar;
+                  saveLocalData(state.daftar);
+                }
+              } else {
+                await setDoc(sharedDocRef, {
+                  daftar: state.daftar,
+                  updatedAt: getCurrentTimeWIB()
+                });
+              }
+
+              state.cloudMode = "live";
+              state.lastSyncTime = getCurrentTimeWIB();
+              updateSyncBadgeUI();
+              render();
+            },
+            (err) => {
+              console.warn("Firestore listener error, beralih ke mode lokal:", err);
+              isCloudReady = false;
+              state.cloudMode = "local";
+              updateSyncBadgeUI();
+            }
+          );
+        });
+      } catch (err) {
+        console.warn("Firebase tidak aktif, menjalankan mode lokal:", err);
+        state.cloudMode = "local";
+        state.lastSyncTime = getCurrentTimeWIB();
+        updateSyncBadgeUI();
+      }
+    }
+
+    // =========================================================================
+    // 6. RENDER HEADER, NAVIGATION & DAY STRIP (hari[0..6])
+    // =========================================================================
+    function renderTopNavigation() {
+      const modeBadge = document.getElementById("activeModeBadge");
+      const toggleLabel = document.getElementById("pjToggleLabel");
+      const iconLocked = document.getElementById("pjIconLocked");
+      const iconUnlocked = document.getElementById("pjIconUnlocked");
+      const btnTogglePJ = document.getElementById("btnTogglePJBar");
+      const pjBanner = document.getElementById("pjActiveBanner");
+      const addPanel = document.getElementById("addSchedulePanel");
+      const btnReset = document.getElementById("btnResetDefault");
+
+      if (state.isPJUnlocked) {
+        modeBadge.textContent = "Mode PJ Kelas";
+        modeBadge.className =
+          "font-mono text-[11px] font-semibold px-2.5 py-1 rounded border bg-emerald-50 border-emerald-200 text-emerald-800";
+        toggleLabel.textContent = "Kunci Mode PJ";
+        iconLocked.classList.add("hidden");
+        iconUnlocked.classList.remove("hidden");
+        btnTogglePJ.className =
+          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition cursor-pointer bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100";
+        pjBanner.classList.remove("hidden");
+        addPanel.classList.remove("hidden");
+        btnReset.classList.remove("hidden");
+      } else {
+        modeBadge.textContent = "Mode Mahasiswa";
+        modeBadge.className =
+          "font-mono text-[11px] font-semibold px-2.5 py-1 rounded border bg-slate-100 border-slate-200 text-slate-700";
+        toggleLabel.textContent = "Mode PJ Kelas";
+        iconLocked.classList.remove("hidden");
+        iconUnlocked.classList.add("hidden");
+        btnTogglePJ.className =
+          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition cursor-pointer bg-white border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-50";
+        pjBanner.classList.add("hidden");
+        addPanel.classList.add("hidden");
+        btnReset.classList.add("hidden");
+      }
+
+      // Update style tab aktif
+      const tabs = [
+        { id: "navBesok", key: "besok" },
+        { id: "navSemua", key: "semua" },
+        { id: "navTrace", key: "trace" }
+      ];
+
+      tabs.forEach((t) => {
+        const el = document.getElementById(t.id);
+        if (!el) return;
+        if (state.activeTab === t.key) {
+          el.className =
+            "px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-pnj text-pnj transition whitespace-nowrap cursor-pointer";
+        } else {
+          el.className =
+            "px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-ink hover:border-slate-300 transition whitespace-nowrap cursor-pointer";
+        }
+      });
+
+      const viewSimulasi = document.getElementById("viewSimulasi");
+      const viewTrace = document.getElementById("viewTrace");
+      if (state.activeTab === "trace") {
+        viewSimulasi.classList.add("hidden");
+        viewTrace.classList.remove("hidden");
+      } else {
+        viewSimulasi.classList.remove("hidden");
+        viewTrace.classList.add("hidden");
+      }
+    }
+
+    function renderDayStrip() {
+      const container = document.getElementById("dayStripContainer");
+      const formulaBox = document.getElementById("moduloFormulaBox");
+      const besokIdx = (state.todayIdx + 1) % 7;
+
+      if (formulaBox) {
+        formulaBox.textContent = `besok = (${state.todayIdx} + 1) % 7 -> ${besokIdx} (${HARI_PANJANG[besokIdx]})`;
+      }
+
+      if (!container) return;
+      container.innerHTML = HARI_PENDEK.map((shortName, idx) => {
+        const isToday = idx === state.todayIdx;
+        const isTomorrow = idx === besokIdx;
+        const isSeninLibur = idx === 0;
+
+        let btnClass =
+          "flex flex-col items-start px-2.5 py-2 rounded-md border text-left transition cursor-pointer ";
+        if (isToday) {
+          btnClass += "bg-pnj text-white border-pnj shadow-xs";
+        } else if (isTomorrow) {
+          btnClass += "bg-pnj-light/70 text-ink border-pnj-border hover:border-pnj";
+        } else {
+          btnClass += "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50";
+        }
+
+        const tagLabel = isToday
+          ? "HARI INI"
+          : isTomorrow
+          ? "BESOK (H+1)"
+          : isSeninLibur
+          ? "LIBUR"
+          : `${state.daftar.filter((m) => m.hari === idx).length} matkul`;
+
+        const tagClass = isToday
+          ? "text-pnj-light"
+          : isTomorrow
+          ? "text-pnj font-bold"
+          : "text-slate-400";
+
+        return `
+          <button type="button" data-select-day="${idx}" class="${btnClass}">
+            <span class="font-mono text-xs font-bold">${idx}: ${shortName}</span>
+            <span class="font-mono text-[10px] mt-0.5 ${tagClass}">${tagLabel}</span>
+          </button>
+        `;
+      }).join("");
+
+      container.querySelectorAll("button[data-select-day]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.todayIdx = Number(btn.getAttribute("data-select-day"));
+          state.confirmDeleteId = null;
+          render();
+        });
+      });
+    }
+
+    // =========================================================================
+    // 7. RENDER VIEW: JADWAL BESOK (H-1) & SEMUA JADWAL
+    // =========================================================================
+    function renderViewSimulasi() {
+      const heading = document.getElementById("scheduleHeading");
+      const indexPill = document.getElementById("scheduleIndexPill");
+      const subheading = document.getElementById("scheduleSubheading");
+      const container = document.getElementById("scheduleListContainer");
+
+      const besokIdx = (state.todayIdx + 1) % 7;
+
+      if (state.activeTab === "besok") {
+        heading.textContent = `Jadwal Kuliah Besok — ${HARI_PANJANG[besokIdx]}`;
+        indexPill.textContent = `besok = hari[${besokIdx}]`;
+        subheading.textContent = `Simulasi hari ini: ${HARI_PANJANG[state.todayIdx]} (indeks ${state.todayIdx}). Menampilkan hasil filter otomatis H+1.`;
+
+        const matched = state.daftar.filter((item) => item.hari === besokIdx);
+
+        if (matched.length === 0) {
+          if (besokIdx === 0) {
+            container.innerHTML = `
+              <div class="bg-white border border-slate-200 rounded-lg p-6 text-center space-y-2">
+                <div class="inline-flex items-center font-mono text-xs font-bold px-2.5 py-1 rounded bg-pnj-light text-pnj border border-pnj-border">
+                  LIBUR KULIAH // SENIN OFF (0 MATKUL)
+                </div>
+                <h3 class="text-base font-bold text-ink">Besok Hari Senin — Tidak Ada Perkuliahan Reguler</h3>
+                <p class="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto">
+                  Jadwal kuliah reguler berlangsung dari hari <strong>Selasa hingga Jumat</strong> (2 mata kuliah per hari). Silakan gunakan waktu untuk belajar mandiri atau persiapan praktikum.
+                </p>
+              </div>
+            `;
+            return;
+          }
+
+          if (besokIdx === 5 || besokIdx === 6) {
+            container.innerHTML = `
+              <div class="bg-white border border-slate-200 rounded-lg p-6 text-center space-y-2">
+                <div class="inline-flex items-center font-mono text-xs font-bold px-2.5 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  LIBUR AKHIR PEKAN // ${HARI_PANJANG[besokIdx].toUpperCase()}
+                </div>
+                <h3 class="text-base font-bold text-ink">Tidak Ada Jadwal Kuliah Reguler Besok</h3>
+                <p class="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto">
+                  Besok jatuh pada hari <strong>${HARI_PANJANG[besokIdx]}</strong> (indeks <span class="font-mono">${besokIdx}</span>). Sistem otomatis mendeteksi hari libur akhir pekan.
+                </p>
+              </div>
+            `;
+            return;
+          }
+
+          container.innerHTML = `
+            <div class="bg-white border border-slate-200 rounded-lg p-6 text-center space-y-1.5">
+              <p class="font-mono text-xs font-semibold text-slate-500">EMPTY_RESULT // 0 MATKUL</p>
+              <p class="text-sm text-slate-600">Belum ada jadwal mata kuliah tercatat untuk hari ${HARI_PANJANG[besokIdx]}.</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = matched
+          .map((item) => buildScheduleCardHTML(item, false))
+          .join("");
+        attachCardEventListeners(container);
+        return;
+      }
+
+      // Tab: Semua Jadwal (Senin Libur + Selasa..Jumat + Sabtu jika ada)
+      heading.textContent = "Semua Jadwal Perkuliahan (Senin Libur • Selasa–Jumat)";
+      indexPill.textContent = `total = ${state.daftar.length} matkul`;
+      subheading.textContent = "Menampilkan seluruh struktur array jadwal berdasarkan urutan indeks hari.";
+
+      const seninBanner = `
+        <div class="bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600">0: Senin</span>
+            <span class="text-xs sm:text-sm font-semibold text-slate-700">Libur Kuliah Reguler (0 Matkul)</span>
+          </div>
+          <span class="font-mono text-[11px] text-slate-400">OFF DAY</span>
+        </div>
+      `;
+
+      const sortedAll = [...state.daftar].sort((a, b) => a.hari - b.hari);
+      const cardsHTML = sortedAll
+        .map((item) => buildScheduleCardHTML(item, true))
+        .join("");
+
+      container.innerHTML = seninBanner + cardsHTML;
+      attachCardEventListeners(container);
+    }
+
+    // =========================================================================
+    // 8. KOMPONEN KARTU JADWAL + DROPDOWN MODE PJ KELAS
+    // =========================================================================
+    function buildScheduleCardHTML(item, showDayBadge) {
+      const isDeleting = state.confirmDeleteId === item.id;
+
+      const pjEditorHTML = state.isPJUnlocked
+        ? `
+          <div class="mt-3.5 pt-3.5 border-t border-slate-200 bg-slate-50/80 -mx-4 -mb-4 px-4 py-3.5 rounded-b-lg space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-mono text-[11px] font-bold uppercase tracking-wider text-pnj">
+                Edit Jadwal (Mode PJ Kelas)
+              </span>
+              ${
+                isDeleting
+                  ? `<div class="inline-flex items-center gap-1.5">
+                      <button type="button" data-confirm-delete="${item.id}" class="font-mono text-[11px] font-semibold px-2 py-1 rounded bg-rose-600 text-white hover:bg-rose-700 cursor-pointer">
+                        Yakin Hapus
+                      </button>
+                      <button type="button" data-cancel-delete="1" class="font-mono text-[11px] px-2 py-1 rounded bg-white border border-slate-300 text-slate-600 cursor-pointer">
+                        Batal
+                      </button>
+                    </div>`
+                  : `<button type="button" data-ask-delete="${item.id}" class="font-mono text-[11px] text-slate-500 hover:text-rose-600 px-2 py-0.5 rounded hover:bg-rose-50 transition cursor-pointer">
+                      [hapus jadwal]
+                    </button>`
+              }
+            </div>
+
+            <!-- 4 Dropdown Terstandar: Mata Kuliah, Jam, Ruangan, Status -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              <div>
+                <label class="block font-mono text-[10px] font-semibold uppercase text-slate-500 mb-1">Mata Kuliah</label>
+                <select
+                  data-field="matkul"
+                  data-item-id="${item.id}"
+                  class="w-full px-2.5 py-1.5 rounded bg-white border border-slate-300 text-ink font-medium focus:outline-none focus:border-pnj"
+                >
+                  ${buildOptionsHTML(OPSI_MATKUL, item.matkul)}
+                </select>
+              </div>
+
+              <div>
+                <label class="block font-mono text-[10px] font-semibold uppercase text-slate-500 mb-1">Jam Perkuliahan</label>
+                <select
+                  data-field="jam"
+                  data-item-id="${item.id}"
+                  class="w-full font-mono px-2.5 py-1.5 rounded bg-white border border-slate-300 text-ink focus:outline-none focus:border-pnj"
+                >
+                  ${buildOptionsHTML(OPSI_JAM, item.jam)}
+                </select>
+              </div>
+
+              <div>
+                <label class="block font-mono text-[10px] font-semibold uppercase text-slate-500 mb-1">Ruangan Kampus</label>
+                <select
+                  data-field="ruang"
+                  data-item-id="${item.id}"
+                  class="w-full font-mono px-2.5 py-1.5 rounded bg-white border border-slate-300 text-ink focus:outline-none focus:border-pnj"
+                >
+                  ${buildOptionsHTML(OPSI_RUANG, item.ruang)}
+                </select>
+              </div>
+
+              <div>
+                <label class="block font-mono text-[10px] font-semibold uppercase text-slate-500 mb-1">Status Kelas</label>
+                <select
+                  data-field="status"
+                  data-item-id="${item.id}"
+                  class="w-full font-mono px-2.5 py-1.5 rounded bg-white border border-slate-300 text-ink font-semibold focus:outline-none focus:border-pnj"
+                >
+                  ${buildOptionsHTML(OPSI_STATUS, item.status)}
+                </select>
+              </div>
+            </div>
+
+            <!-- Catatan PJ + Quick-Fill Chips -->
+            <form data-note-form="${item.id}" class="space-y-1.5">
+              <label class="block font-mono text-[10px] font-semibold uppercase text-slate-500">Catatan PJ Kelas</label>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  name="catatan"
+                  value="${escapeHTML(item.catatan)}"
+                  placeholder="Catatan singkat..."
+                  class="flex-1 text-xs px-2.5 py-1.5 rounded bg-white border border-slate-300 text-ink focus:outline-none focus:border-pnj"
+                  required
+                />
+                <button
+                  type="submit"
+                  class="px-3 py-1.5 rounded bg-ink hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer shrink-0"
+                >
+                  Simpan Catatan
+                </button>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span class="font-mono text-[10px] text-slate-400">Quick-fill:</span>
+                ${QUICK_CATATAN.map(
+                  (chip) => `
+                    <button
+                      type="button"
+                      data-card-chip="${escapeHTML(chip)}"
+                      data-item-id="${item.id}"
+                      class="font-mono text-[10px] px-2 py-0.5 rounded bg-white hover:bg-pnj-light hover:text-pnj hover:border-pnj-border border border-slate-200 text-slate-600 transition cursor-pointer"
+                    >
+                      ${escapeHTML(chip)}
+                    </button>
+                  `
+                ).join("")}
+              </div>
+            </form>
+          </div>
+        `
+        : "";
+
+      return `
+        <article class="bg-white border border-slate-200 rounded-lg p-4 transition hover:border-slate-300">
+          <div class="flex flex-col md:flex-row md:items-start justify-between gap-3">
+            <!-- Kiri: Jam & Ruangan -->
+            <div class="md:w-48 shrink-0 space-y-1">
+              <div class="font-mono text-xs font-bold text-ink tabular-nums">
+                ${escapeHTML(item.jam)}
+              </div>
+              <div class="inline-flex items-center gap-1.5 font-mono text-xs text-pnj font-semibold break-words">
+                <span>@ ${escapeHTML(item.ruang)}</span>
+              </div>
+              ${
+                showDayBadge
+                  ? `<div><span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">${HARI_PANJANG[item.hari]}</span></div>`
+                  : ""
+              }
+            </div>
+
+            <!-- Tengah & Kanan: Mata Kuliah, Status & Catatan PJ -->
+            <div class="flex-1 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h4 class="text-sm sm:text-base font-bold text-ink leading-snug">
+                  ${escapeHTML(item.matkul)}
+                </h4>
+                <div>
+                  ${getStatusBadgeHTML(item.status)}
+                </div>
+              </div>
+
+              <!-- Left-bordered PJ Note Block -->
+              <div class="border-l-2 border-pnj pl-3 py-0.5 text-xs text-slate-600 leading-relaxed">
+                <span class="font-mono text-[11px] font-semibold text-slate-500">Catatan PJ (${escapeHTML(item.updatedAt || "Terkini")}):</span>
+                <span class="text-slate-700">${escapeHTML(item.catatan)}</span>
+              </div>
+            </div>
+          </div>
+
+          ${pjEditorHTML}
+        </article>
+      `;
+    }
+
+    function attachCardEventListeners(container) {
+      // Handler perubahan dropdown (Mata Kuliah, Jam, Ruangan, Status) + Perilaku Cerdas Status->Ruangan
+      container.querySelectorAll("select[data-field]").forEach((selectEl) => {
+        selectEl.addEventListener("change", async () => {
+          const id = selectEl.getAttribute("data-item-id");
+          const field = selectEl.getAttribute("data-field");
+          const val = selectEl.value;
+          const target = state.daftar.find((x) => x.id === id);
+          if (!target) return;
+
+          target[field] = val;
+
+          // Perilaku cerdas Status <-> Ruangan
+          if (field === "status") {
+            if (val === "ONLINE") {
+              target.ruang = "Online (Zoom / GMeet)";
+            } else if (val === "MASUK" && target.ruang === "Online (Zoom / GMeet)") {
+              target.ruang = "AA301";
+            }
+          }
+
+          target.updatedAt = getCurrentTimeWIB();
+          render();
+          await saveDataToCloud();
+          showToast(`Diperbarui: ${target.matkul} (${target.status} @ ${target.ruang})`);
+        });
+      });
+
+      // Quick-fill chip catatan pada kartu
+      container.querySelectorAll("button[data-card-chip]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-item-id");
+          const chipText = btn.getAttribute("data-card-chip");
+          const target = state.daftar.find((x) => x.id === id);
+          if (target) {
+            target.catatan = chipText;
+            target.updatedAt = getCurrentTimeWIB();
+            render();
+            await saveDataToCloud();
+            showToast(`Catatan diperbarui: "${chipText}"`);
+          }
+        });
+      });
+
+      // Form simpan catatan manual pada kartu
+      container.querySelectorAll("form[data-note-form]").forEach((form) => {
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const id = form.getAttribute("data-note-form");
+          const catatanVal = form.querySelector('input[name="catatan"]').value.trim();
+          const target = state.daftar.find((x) => x.id === id);
+          if (target && catatanVal) {
+            target.catatan = catatanVal;
+            target.updatedAt = getCurrentTimeWIB();
+            render();
+            await saveDataToCloud();
+            showToast(`Catatan "${target.matkul}" tersimpan`);
+          }
+        });
+      });
+
+      // Two-step delete
+      container.querySelectorAll("button[data-ask-delete]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.confirmDeleteId = btn.getAttribute("data-ask-delete");
+          render();
+        });
+      });
+
+      container.querySelectorAll("button[data-cancel-delete]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          state.confirmDeleteId = null;
+          render();
+        });
+      });
+
+      container.querySelectorAll("button[data-confirm-delete]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-confirm-delete");
+          const removed = state.daftar.find((x) => x.id === id);
+          state.daftar = state.daftar.filter((x) => x.id !== id);
+          state.confirmDeleteId = null;
+          render();
+          await saveDataToCloud();
+          if (removed) {
+            showToast(`Jadwal "${removed.matkul}" dihapus`);
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // 9. RENDER VIEW: TRACE ALGORITMA & MEMORY INSPECTOR
+    // =========================================================================
+    function renderViewTrace() {
+      const memArrayLen = document.getElementById("memArrayLen");
+      const memTargetTag = document.getElementById("memTargetTag");
+      const traceSummaryBox = document.getElementById("traceSummaryBox");
+      const memoryBlocksContainer = document.getElementById("memoryBlocksContainer");
+
+      const besokIdx = (state.todayIdx + 1) % 7;
+      const total = state.daftar.length;
+      const matchCount = state.daftar.filter((m) => m.hari === besokIdx).length;
+
+      if (memArrayLen) memArrayLen.textContent = total;
+      if (memTargetTag) memTargetTag.textContent = `target: besokIdx == ${besokIdx} (${HARI_PENDEK[besokIdx]})`;
+
+      if (traceSummaryBox) {
+        if (besokIdx === 0) {
+          traceSummaryBox.innerHTML = `
+            <div>&gt; todayIdx = ${state.todayIdx} (${HARI_PANJANG[state.todayIdx]})</div>
+            <div>&gt; besokIdx = (${state.todayIdx} + 1) % 7 = <span class="text-cyan-400 font-bold">0 (Senin)</span></div>
+            <div>&gt; branch: <span class="text-amber-300">if (besokIdx == 0) &rarr; LIBUR KULIAH (SENIN OFF)</span></div>
+          `;
+        } else if (besokIdx === 5 || besokIdx === 6) {
+          traceSummaryBox.innerHTML = `
+            <div>&gt; todayIdx = ${state.todayIdx} (${HARI_PANJANG[state.todayIdx]})</div>
+            <div>&gt; besokIdx = (${state.todayIdx} + 1) % 7 = <span class="text-cyan-400 font-bold">${besokIdx} (${HARI_PANJANG[besokIdx]})</span></div>
+            <div>&gt; branch: <span class="text-amber-300">else if (besokIdx == 5 || besokIdx == 6) &rarr; LIBUR AKHIR PEKAN</span></div>
+          `;
+        } else {
+          traceSummaryBox.innerHTML = `
+            <div>&gt; besokIdx = (${state.todayIdx} + 1) % 7 = <span class="text-cyan-400 font-bold">${besokIdx} (${HARI_PANJANG[besokIdx]})</span></div>
+            <div>&gt; linear_search(jadwal, n=${total}): <span class="text-emerald-400 font-bold">${matchCount} MATCH</span>, ${total - matchCount} SKIP</div>
+          `;
+        }
+      }
+
+      if (!memoryBlocksContainer) return;
+
+      memoryBlocksContainer.innerHTML = state.daftar
+        .map((item, idx) => {
+          const isMatch = item.hari === besokIdx;
+          const cardStyle = isMatch
+            ? "bg-emerald-50/80 border-emerald-300"
+            : "bg-slate-50 border-slate-200 opacity-75";
+          const badgeHTML = isMatch
+            ? `<span class="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-600 text-white">MATCH</span>`
+            : `<span class="font-mono text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-600">SKIP</span>`;
+
+          return `
+            <div class="border rounded-md p-2.5 font-mono text-xs ${cardStyle}">
+              <div class="flex items-center justify-between gap-2 pb-1 border-b border-slate-200/70">
+                <span class="font-bold text-ink">jadwal[${idx}]</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-500">hariIdx: ${item.hari} (${HARI_PENDEK[item.hari]})</span>
+                  ${badgeHTML}
+                </div>
+              </div>
+              <div class="mt-1.5 text-[11px] text-slate-700 space-y-0.5">
+                <div>matkul : "${escapeHTML(item.matkul)}"</div>
+                <div>jam    : "${escapeHTML(item.jam)}" | ruang: "${escapeHTML(item.ruang)}"</div>
+                <div>status : "${escapeHTML(item.status)}"</div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    // =========================================================================
+    // 10. MASTER RENDER & EVENT BINDING
+    // =========================================================================
+    function render() {
+      renderTopNavigation();
+      renderDayStrip();
+      renderViewSimulasi();
+      renderViewTrace();
+    }
+
+    function populateAddFormDropdowns() {
+      const addMatkul = document.getElementById("addMatkulSelect");
+      const addJam = document.getElementById("addJamSelect");
+      const addRuang = document.getElementById("addRuangSelect");
+      const addStatus = document.getElementById("addStatusSelect");
+
+      if (addMatkul) addMatkul.innerHTML = buildOptionsHTML(OPSI_MATKUL, OPSI_MATKUL[0]);
+      if (addJam) addJam.innerHTML = buildOptionsHTML(OPSI_JAM, OPSI_JAM[0]);
+      if (addRuang) addRuang.innerHTML = buildOptionsHTML(OPSI_RUANG, OPSI_RUANG[0]);
+      if (addStatus) addStatus.innerHTML = buildOptionsHTML(OPSI_STATUS, OPSI_STATUS[0]);
+    }
+
+    function bindGlobalEvents() {
+      // Navigasi Tab
+      document.getElementById("navBesok")?.addEventListener("click", () => {
+        state.activeTab = "besok";
+        render();
+      });
+
+      document.getElementById("navSemua")?.addEventListener("click", () => {
+        state.activeTab = "semua";
+        render();
+      });
+
+      document.getElementById("navTrace")?.addEventListener("click", () => {
+        state.activeTab = "trace";
+        render();
+      });
+
+      // Sinkronisasi Hari Real-time
+      document.getElementById("btnSyncRealtimeDay")?.addEventListener("click", () => {
+        state.todayIdx = getRealtimeTodayIndex();
+        state.confirmDeleteId = null;
+        render();
+        showToast(`Disinkronkan ke hari ini: ${HARI_PANJANG[state.todayIdx]}`);
+      });
+
+      // Toggle Bar Login Mode PJ
+      const authBar = document.getElementById("pjAuthBar");
+      const inputPin = document.getElementById("inputPJPin");
+      const pinError = document.getElementById("pjPinError");
+
+      document.getElementById("btnTogglePJBar")?.addEventListener("click", () => {
+        if (state.isPJUnlocked) {
+          state.isPJUnlocked = false;
+          state.confirmDeleteId = null;
+          authBar?.classList.add("hidden");
+          render();
+          showToast("Mode PJ dikunci. Kembali ke Mode Mahasiswa.");
+          return;
+        }
+
+        authBar?.classList.toggle("hidden");
+        pinError?.classList.add("hidden");
+        if (authBar && !authBar.classList.contains("hidden")) {
+          inputPin?.focus();
+        }
+      });
+
+      document.getElementById("btnCloseAuthBar")?.addEventListener("click", () => {
+        authBar?.classList.add("hidden");
+        pinError?.classList.add("hidden");
+      });
+
+      // Toggle intip/sembunyikan ketikan PIN
+      document.getElementById("btnTogglePinVisibility")?.addEventListener("click", () => {
+        if (!inputPin) return;
+        const eyeShow = document.getElementById("eyeIconShow");
+        const eyeHide = document.getElementById("eyeIconHide");
+        if (inputPin.type === "password") {
+          inputPin.type = "text";
+          eyeShow?.classList.add("hidden");
+          eyeHide?.classList.remove("hidden");
+        } else {
+          inputPin.type = "password";
+          eyeShow?.classList.remove("hidden");
+          eyeHide?.classList.add("hidden");
+        }
+      });
+
+      // Submit Form Login PIN PJ Kelas
+      document.getElementById("formPJAuth")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const entered = (inputPin?.value || "").trim();
+        if (entered === PIN_PJ) {
+          state.isPJUnlocked = true;
+          if (inputPin) inputPin.value = "";
+          pinError?.classList.add("hidden");
+          authBar?.classList.add("hidden");
+          render();
+          showToast("Otorisasi berhasil: Mode PJ Kelas aktif.");
+        } else {
+          pinError?.classList.remove("hidden");
+          inputPin?.select();
+        }
+      });
+
+      // Copy Info ke Grup WA
+      document.getElementById("btnCopyWA")?.addEventListener("click", () => {
+        const besokIdx = (state.todayIdx + 1) % 7;
+        const namaBesok = HARI_PANJANG[besokIdx];
+        const matched = state.daftar.filter((item) => item.hari === besokIdx);
+
+        let waText = `*INFO JADWAL KULIAH BESOK — ${namaBesok.toUpperCase()}*\n`;
+        waText += `_(Update via jadwal.pnj // h-1)_\n\n`;
+
+        if (matched.length === 0) {
+          waText +=
+            besokIdx === 0
+              ? `Tidak ada perkuliahan reguler (Senin Libur / 0 Matkul).`
+              : `Tidak ada jadwal perkuliahan reguler besok.`;
+        } else {
+          matched.forEach((m, idx) => {
+            waText += `${idx + 1}. *${m.matkul}* [${m.status}]\n`;
+            waText += `   • Jam: ${m.jam}\n`;
+            waText += `   • Ruang: ${m.ruang}\n`;
+            waText += `   • Catatan PJ: ${m.catatan}\n\n`;
+          });
+        }
+
+        if (copyTextToClipboard(waText.trim())) {
+          showToast(`Info jadwal ${namaBesok} disalin untuk grup WA.`);
+        } else {
+          showToast("Gagal menyalin teks ke clipboard.", true);
+        }
+      });
+
+      // Reset Data Default
+      document.getElementById("btnResetDefault")?.addEventListener("click", async () => {
+        state.daftar = JSON.parse(JSON.stringify(DEFAULT_JADWAL));
+        state.confirmDeleteId = null;
+        render();
+        await saveDataToCloud();
+        showToast("Seluruh jadwal dikembalikan ke data default PNJ.");
+      });
+
+      // Perilaku cerdas Status <-> Ruangan pada Form Tambah Jadwal
+      const addStatusSelect = document.getElementById("addStatusSelect");
+      const addRuangSelect = document.getElementById("addRuangSelect");
+      addStatusSelect?.addEventListener("change", () => {
+        if (!addRuangSelect) return;
+        if (addStatusSelect.value === "ONLINE") {
+          addRuangSelect.value = "Online (Zoom / GMeet)";
+        } else if (
+          addStatusSelect.value === "MASUK" &&
+          addRuangSelect.value === "Online (Zoom / GMeet)"
+        ) {
+          addRuangSelect.value = "AA301";
+        }
+      });
+
+      // Quick-fill chips pada Form Tambah Jadwal
+      document.querySelectorAll("button[data-add-chip]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const catatanInput = document.getElementById("addCatatanInput");
+          if (catatanInput) {
+            catatanInput.value = btn.getAttribute("data-add-chip") || "";
+          }
+        });
+      });
+
+      // Submit Form Tambah Jadwal Baru
+      document.getElementById("formAddSchedule")?.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const hari = Number(form.hari.value);
+        const matkul = form.matkul.value;
+        const jam = form.jam.value;
+        const ruang = form.ruang.value;
+        const status = form.status.value;
+        const catatan = form.catatan.value.trim() || "Sesuai jadwal";
+
+        state.daftar.push({
+          id: `mk-${Date.now()}`,
+          hari,
+          matkul,
+          jam,
+          ruang,
+          status,
+          catatan,
+          updatedAt: getCurrentTimeWIB()
+        });
+
+        render();
+        await saveDataToCloud();
+        showToast(`Jadwal "${matkul}" (${HARI_PANJANG[hari]}) ditambahkan.`);
+      });
+
+      // Copy Kode C++
+      document.getElementById("btnCopyCppCode")?.addEventListener("click", () => {
+        const cppCodeEl = document.getElementById("cppSourceCode");
+        if (cppCodeEl && copyTextToClipboard(cppCodeEl.textContent || "")) {
+          showToast("Kode C++ (main.cpp) berhasil disalin.");
+        } else {
+          showToast("Gagal menyalin kode C++.", true);
+        }
+      });
+    }
+
+    // =========================================================================
+    // 11. BOOTSTRAP APLIKASI
+    // =========================================================================
+    populateAddFormDropdowns();
+    bindGlobalEvents();
+    render();
+    initFirebaseSync();
+  </script>
+</body>
+</html>
